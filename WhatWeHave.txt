@@ -1,0 +1,324 @@
+🔧 ESC STM32F103 — FINALNY KONSPEKT (v1.0 ARCHIVE)
+1. 🧠 Architektura sprzętowa
+
+Twój ESC to pełnoprawny kontroler sensorless BLDC:
+
+✔ 6x PWM (TIM1 CHx + CHxN)
+✔ 3x pomiar prądu (low-side shunt)
+✔ 3x BEMF (ADC)
+✔ 1x VBAT
+✔ 1x NTC
+✔ UART debug
+✔ wejścia sterujące (throttle + brake)
+
+👉 Czyli: pełny stack pod profesjonalny ESC
+
+2. ⚡ PINOUT (WERSJA OSTATECZNA)
+🔹 MOSTEK 3-FAZOWY
+High-side (PWM)
+
+PA8 → TIM1_CH1 → HIN_A
+
+PA9 → TIM1_CH2 → HIN_B
+
+PA10 → TIM1_CH3 → HIN_C
+
+Low-side (ACTIVE LOW)
+
+PB13 → TIM1_CH1N → LIN_A
+
+PB14 → TIM1_CH2N → LIN_B
+
+PB15 → TIM1_CH3N → LIN_C
+
+🔹 ADC
+BEMF (offset ~1.65V)
+
+PA0 → BEMF_A
+
+PA1 → BEMF_B
+
+PA2 → BEMF_C
+
+Sterowanie (throttle)
+
+PA3 → SP (setpoint ~0.7V)
+
+Prądy (shunty R002)
+
+PA4 → IA
+
+PA5 → IB
+
+PA6 → IC
+
+Napięcie
+
+PA7 → VBAT
+
+Temperatura
+
+PB0 → NTC
+
+🔹 GPIO
+
+PB1 → BRAKE input
+
+PB2 → LED status
+
+🔹 UART
+
+PB6 → TX
+
+PB7 → RX
+
+baud: 9600
+
+🔹 DEBUG / RESERVED
+
+PA13 → SWDIO
+
+PA14 → SWCLK
+
+PB3 / PB4 → JTAG
+
+👉 NIE DOTYKAĆ
+
+🔹 NIEUSTALONE (do reverse)
+
+PA11
+
+PA12
+
+PA15
+
+PB5
+
+PB8
+
+PB9
+
+PB10
+
+PB11
+
+PB12 ⚠️ (podejrzany: ENABLE / FAULT)
+
+🔹 WYJŚCIA OŚWIETLENIA (zewnętrzne)
+
+Y-L → yellow LED
+
+R-L → red LED
+
+G-L → green LED
+
+F-L → front light
+
+B-L → back light
+
+👉 sterowane przez tranzystory z GPIO
+
+3. 🔁 KOMUTACJA (6-STEP)
+0: A+ B- C float
+1: A+ C- B float
+2: B+ C- A float
+3: B+ A- C float
+4: C+ A- B float
+5: C+ B- A float
+4. ⚠️ KLUCZOWE WŁAŚCIWOŚCI HARDWARE
+FD2103S — real behavior
+
+LIN → active LOW
+
+HIN → active HIGH
+
+brak wybaczania błędów 😄
+
+👉 Błąd = zwarcie = "klejenie"
+
+5. 🧪 SYSTEM UART — PROJEKT
+TRYB 1 — NORMALNY (TELEMETRIA)
+
+Wysyłka cykliczna (np. 50–100 Hz)
+
+Dane:
+
+napięcie (VBAT)
+
+prąd (sum / fazowy)
+
+RPM
+
+duty
+
+temperatura
+
+stan (RUN / STOP / FAULT)
+
+Format ramki (propozycja)
+[HEADER][LEN][DATA...][CRC16]
+
+np:
+
+0xAA 0x55
+len
+payload
+crc16
+Payload (przykład)
+uint16_t vbat_mv
+int16_t current_ma
+uint16_t rpm
+uint8_t state
+uint8_t temp
+
+👉 Na razie:
+✔ zrób pustą funkcję:
+
+void sendTelemetryFrame() {}
+6. 🧪 TRYB 2 — DEBUG (INTERAKTYWNY)
+Wejście:
+
+klawisz: d
+
+👉 wyłącza telemetry
+
+🎮 Sterowanie
+Start / stop
+
+SPACE
+
+Prędkość
+
++ / -
+
+Kierunek
+
+LEFT / RIGHT lub l / r
+
+🔬 Debug funkcje
+BEMF
+
+b → stream do Arduino plotter
+
+Kolejność faz (resolver)
+
+1 → ABC
+
+2 → ACB
+
+3 → BAC
+
+4 → BCA
+
+5 → CAB
+
+6 → CBA
+
+👉 mega ważne przy nieznanym silniku
+
+Rampa
+
+[ / ] → ramp speed
+
+Limit prądu
+
+{ / } → max current
+
+Monitoring prądów
+
+i → ON/OFF
+
+STEP TEST
+
+. → krok do przodu
+
+, → krok do tyłu
+
+OPEN LOOP
+
+o
+
+STOP HARD
+
+s
+
+7. 🔥 AUTOTUNE (REAL TALK)
+
+Powiem Ci uczciwie — da się, ale:
+
+👉 to już poziom:
+
+detekcja BEMF
+
+estymacja kąta
+
+adaptacja timingu
+
+Minimum autotune:
+
+sprawdzenie kolejności faz
+
+znalezienie minimalnego duty do startu
+
+ramp time
+
+👉 to możemy zrobić później — nie teraz
+
+8. 🧩 PRIORYTETY (CO TERAZ)
+🔴 KROK 1
+
+✔ stabilne 6-step
+✔ brak "klejenia"
+
+🔴 KROK 2
+
+✔ open loop kontrolowany z UART
+
+🔴 KROK 3
+
+✔ BEMF odczyt stabilny
+
+🔴 KROK 4
+
+✔ przejście na sensorless
+
+🔴 KROK 5
+
+✔ telemetry
+
+9. 💡 NAJWAŻNIEJSZE WNIOSKI
+
+masz pełny hardware pod ESC klasy fabrycznej
+
+największy problem to:
+
+logika drivera
+
+timing
+
+debug przez UART = klucz do sukcesu
+
+10. 🧷 BACKUP — CO ZRÓB TERAZ
+
+Serio, konkret:
+
+👉 skopiuj to do:
+
+notatnika
+
+Google Docs
+
+pliku .md
+
+pendrive
+
+👉 bo to jest:
+kilkadziesiąt godzin reverse + debugu
+
+Jak chcesz następny krok, to mogę Ci zrobić:
+
+💻 gotowy szkielet kodu UART debug (klawisze + parser)
+
+⚙️ albo framework ESC (state machine + tryby)
+
+I wtedy już jedziemy jak po sznurku 🚀
