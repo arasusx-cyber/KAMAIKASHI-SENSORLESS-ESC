@@ -1,324 +1,235 @@
-🔧 ESC STM32F103 — FINALNY KONSPEKT (v1.0 ARCHIVE)
-1. 🧠 Architektura sprzętowa
+🔧 STM32F103 ESC (Sensorless BLDC Controller)
 
-Twój ESC to pełnoprawny kontroler sensorless BLDC:
+Final Architecture – Reverse Engineered (v1.0 Archive)
 
-✔ 6x PWM (TIM1 CHx + CHxN)
-✔ 3x pomiar prądu (low-side shunt)
-✔ 3x BEMF (ADC)
-✔ 1x VBAT
-✔ 1x NTC
-✔ UART debug
-✔ wejścia sterujące (throttle + brake)
+📌 Overview
 
-👉 Czyli: pełny stack pod profesjonalny ESC
+This project documents a fully reverse-engineered BLDC ESC based on STM32F103 with a complete hardware stack for sensorless control.
 
-2. ⚡ PINOUT (WERSJA OSTATECZNA)
-🔹 MOSTEK 3-FAZOWY
+The controller supports:
+
+6-PWM motor control (TIM1 complementary outputs)
+
+Phase current sensing (3x shunt)
+
+Back-EMF sensing (3x ADC)
+
+Battery voltage monitoring
+
+Temperature measurement (NTC)
+
+UART debugging & telemetry
+
+External control inputs (throttle + brake)
+
+🧠 Hardware Architecture
+Feature	Description
+MCU	STM32F103C8T6
+PWM	6x (TIM1 CHx + CHxN)
+Current sensing	3x low-side shunt
+BEMF sensing	3x ADC (with ~1.65V offset)
+Voltage sensing	VBAT ADC
+Temperature	NTC
+Communication	UART (9600 baud)
+Inputs	Throttle (analog), Brake (GPIO)
+⚡ Pinout (Final)
+🔹 3-Phase Bridge
 High-side (PWM)
-
-PA8 → TIM1_CH1 → HIN_A
-
-PA9 → TIM1_CH2 → HIN_B
-
-PA10 → TIM1_CH3 → HIN_C
-
+Phase	Pin	Timer	Signal
+A	PA8	TIM1_CH1	HIN_A
+B	PA9	TIM1_CH2	HIN_B
+C	PA10	TIM1_CH3	HIN_C
 Low-side (ACTIVE LOW)
-
-PB13 → TIM1_CH1N → LIN_A
-
-PB14 → TIM1_CH2N → LIN_B
-
-PB15 → TIM1_CH3N → LIN_C
-
-🔹 ADC
-BEMF (offset ~1.65V)
-
-PA0 → BEMF_A
-
-PA1 → BEMF_B
-
-PA2 → BEMF_C
-
-Sterowanie (throttle)
-
-PA3 → SP (setpoint ~0.7V)
-
-Prądy (shunty R002)
-
-PA4 → IA
-
-PA5 → IB
-
-PA6 → IC
-
-Napięcie
-
-PA7 → VBAT
-
-Temperatura
-
-PB0 → NTC
-
+Phase	Pin	Timer	Signal
+A	PB13	TIM1_CH1N	LIN_A
+B	PB14	TIM1_CH2N	LIN_B
+C	PB15	TIM1_CH3N	LIN_C
+🔹 ADC Inputs
+Function	Pin
+BEMF_A	PA0
+BEMF_B	PA1
+BEMF_C	PA2
+Throttle (SP)	PA3
+Current IA	PA4
+Current IB	PA5
+Current IC	PA6
+VBAT	PA7
+NTC	PB0
 🔹 GPIO
-
-PB1 → BRAKE input
-
-PB2 → LED status
-
+Function	Pin
+Brake	PB1
+LED	PB2
 🔹 UART
+Signal	Pin
+TX	PB6
+RX	PB7
 
-PB6 → TX
+Baudrate: 9600
 
-PB7 → RX
+🔹 Debug (Reserved)
+Pin	Function
+PA13	SWDIO
+PA14	SWCLK
+PB3	JTAG
+PB4	JTAG
 
-baud: 9600
+⚠️ Do not use in application.
 
-🔹 DEBUG / RESERVED
+🔹 Unmapped / To Reverse
+PA11, PA12, PA15
+PB5, PB8, PB9
+PB10, PB11
+PB12 (suspected: ENABLE / FAULT)
+🔹 External Outputs (Lighting)
 
-PA13 → SWDIO
+Y-L → Yellow LED
 
-PA14 → SWCLK
+R-L → Red LED
 
-PB3 / PB4 → JTAG
+G-L → Green LED
 
-👉 NIE DOTYKAĆ
+F-L → Front Light
 
-🔹 NIEUSTALONE (do reverse)
+B-L → Back Light
 
-PA11
+Controlled via transistor stages from GPIO.
 
-PA12
-
-PA15
-
-PB5
-
-PB8
-
-PB9
-
-PB10
-
-PB11
-
-PB12 ⚠️ (podejrzany: ENABLE / FAULT)
-
-🔹 WYJŚCIA OŚWIETLENIA (zewnętrzne)
-
-Y-L → yellow LED
-
-R-L → red LED
-
-G-L → green LED
-
-F-L → front light
-
-B-L → back light
-
-👉 sterowane przez tranzystory z GPIO
-
-3. 🔁 KOMUTACJA (6-STEP)
-0: A+ B- C float
-1: A+ C- B float
-2: B+ C- A float
-3: B+ A- C float
-4: C+ A- B float
-5: C+ B- A float
-4. ⚠️ KLUCZOWE WŁAŚCIWOŚCI HARDWARE
-FD2103S — real behavior
-
-LIN → active LOW
+🔁 Commutation (6-Step)
+Step	High	Low	Floating
+0	A+	B-	C
+1	A+	C-	B
+2	B+	C-	A
+3	B+	A-	C
+4	C+	A-	B
+5	C+	B-	A
+⚠️ Driver Characteristics (FD2103S)
 
 HIN → active HIGH
 
-brak wybaczania błędów 😄
+LIN → active LOW
 
-👉 Błąd = zwarcie = "klejenie"
+No fault tolerance (no dead-time protection)
 
-5. 🧪 SYSTEM UART — PROJEKT
-TRYB 1 — NORMALNY (TELEMETRIA)
+❗ Incorrect timing or logic → shoot-through → hardware damage
+❗ Misconfiguration may result in motor "locking" (both MOSFETs active)
 
-Wysyłka cykliczna (np. 50–100 Hz)
+🧪 UART System
+🔹 Mode 1 — Telemetry (default)
 
-Dane:
+Periodic transmission (50–100 Hz)
 
-napięcie (VBAT)
+Frame format:
 
-prąd (sum / fazowy)
+[HEADER][LEN][DATA][CRC16]
 
-RPM
+HEADER: 0xAA 0x55
 
-duty
+Example payload:
 
-temperatura
+uint16_t vbat_mv;
+int16_t  current_ma;
+uint16_t rpm;
+uint8_t  state;
+uint8_t  temp;
 
-stan (RUN / STOP / FAULT)
-
-Format ramki (propozycja)
-[HEADER][LEN][DATA...][CRC16]
-
-np:
-
-0xAA 0x55
-len
-payload
-crc16
-Payload (przykład)
-uint16_t vbat_mv
-int16_t current_ma
-uint16_t rpm
-uint8_t state
-uint8_t temp
-
-👉 Na razie:
-✔ zrób pustą funkcję:
+Stub:
 
 void sendTelemetryFrame() {}
-6. 🧪 TRYB 2 — DEBUG (INTERAKTYWNY)
-Wejście:
+🔹 Mode 2 — Debug (Interactive)
 
-klawisz: d
+Activated via:
 
-👉 wyłącza telemetry
+'d' → toggle debug mode
+🎮 Control
+Key	Function
+SPACE	Start / Stop
++ / -	Speed control
+l / r	Direction
+s	Hard stop
+🔬 Debug Tools
+Key	Function
+b	BEMF stream (plotter)
+i	Current monitoring
+.	Step forward
+,	Step backward
+o	Open loop
+🔄 Phase Order Resolver
+Key	Order
+1	ABC
+2	ACB
+3	BAC
+4	BCA
+5	CAB
+6	CBA
+🔥 Autotune (Future Work)
 
-🎮 Sterowanie
-Start / stop
+Minimal viable autotune should include:
 
-SPACE
+Phase order detection
 
-Prędkość
+Minimum startup duty detection
 
-+ / -
+Ramp timing estimation
 
-Kierunek
+Full implementation requires:
 
-LEFT / RIGHT lub l / r
+BEMF zero-cross detection
 
-🔬 Debug funkcje
-BEMF
+Rotor angle estimation
 
-b → stream do Arduino plotter
+Timing advance control
 
-Kolejność faz (resolver)
+🧩 Development Roadmap
+🔴 Stage 1
 
-1 → ABC
+Stable 6-step commutation
 
-2 → ACB
+No shoot-through ("no locking")
 
-3 → BAC
+🔴 Stage 2
 
-4 → BCA
+UART-controlled open loop
 
-5 → CAB
+🔴 Stage 3
 
-6 → CBA
+Stable BEMF acquisition
 
-👉 mega ważne przy nieznanym silniku
+🔴 Stage 4
 
-Rampa
+Sensorless transition
 
-[ / ] → ramp speed
+🔴 Stage 5
 
-Limit prądu
+Telemetry system
 
-{ / } → max current
+💡 Key Notes
 
-Monitoring prądów
+Hardware supports industrial-grade ESC functionality
 
-i → ON/OFF
+Critical challenges:
 
-STEP TEST
+Driver logic correctness
 
-. → krok do przodu
+Timing & dead-time handling
 
-, → krok do tyłu
+Reliable UART debugging
 
-OPEN LOOP
+🧷 Backup Notice
 
-o
+This document represents multiple hours of reverse engineering and debugging.
 
-STOP HARD
+Recommended:
 
-s
+Store locally (.md / PDF)
 
-7. 🔥 AUTOTUNE (REAL TALK)
+Keep versioned backups
 
-Powiem Ci uczciwie — da się, ale:
+Archive externally
 
-👉 to już poziom:
+🚀 Next Steps
 
-detekcja BEMF
+UART command parser implementation
 
-estymacja kąta
+ESC state machine framework
 
-adaptacja timingu
-
-Minimum autotune:
-
-sprawdzenie kolejności faz
-
-znalezienie minimalnego duty do startu
-
-ramp time
-
-👉 to możemy zrobić później — nie teraz
-
-8. 🧩 PRIORYTETY (CO TERAZ)
-🔴 KROK 1
-
-✔ stabilne 6-step
-✔ brak "klejenia"
-
-🔴 KROK 2
-
-✔ open loop kontrolowany z UART
-
-🔴 KROK 3
-
-✔ BEMF odczyt stabilny
-
-🔴 KROK 4
-
-✔ przejście na sensorless
-
-🔴 KROK 5
-
-✔ telemetry
-
-9. 💡 NAJWAŻNIEJSZE WNIOSKI
-
-masz pełny hardware pod ESC klasy fabrycznej
-
-największy problem to:
-
-logika drivera
-
-timing
-
-debug przez UART = klucz do sukcesu
-
-10. 🧷 BACKUP — CO ZRÓB TERAZ
-
-Serio, konkret:
-
-👉 skopiuj to do:
-
-notatnika
-
-Google Docs
-
-pliku .md
-
-pendrive
-
-👉 bo to jest:
-kilkadziesiąt godzin reverse + debugu
-
-Jak chcesz następny krok, to mogę Ci zrobić:
-
-💻 gotowy szkielet kodu UART debug (klawisze + parser)
-
-⚙️ albo framework ESC (state machine + tryby)
-
-I wtedy już jedziemy jak po sznurku 🚀
+Sensorless control core
