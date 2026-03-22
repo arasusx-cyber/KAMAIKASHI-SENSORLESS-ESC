@@ -1,235 +1,178 @@
-🔧 STM32F103 ESC (Sensorless BLDC Controller)
-
-Final Architecture – Reverse Engineered (v1.0 Archive)
-
-📌 Overview
-
-This project documents a fully reverse-engineered BLDC ESC based on STM32F103 with a complete hardware stack for sensorless control.
-
-The controller supports:
-
-6-PWM motor control (TIM1 complementary outputs)
-
-Phase current sensing (3x shunt)
-
-Back-EMF sensing (3x ADC)
-
-Battery voltage monitoring
-
-Temperature measurement (NTC)
-
-UART debugging & telemetry
-
-External control inputs (throttle + brake)
-
-🧠 Hardware Architecture
-Feature	Description
-MCU	STM32F103C8T6
-PWM	6x (TIM1 CHx + CHxN)
-Current sensing	3x low-side shunt
-BEMF sensing	3x ADC (with ~1.65V offset)
-Voltage sensing	VBAT ADC
-Temperature	NTC
-Communication	UART (9600 baud)
-Inputs	Throttle (analog), Brake (GPIO)
-⚡ Pinout (Final)
-🔹 3-Phase Bridge
-High-side (PWM)
-Phase	Pin	Timer	Signal
-A	PA8	TIM1_CH1	HIN_A
-B	PA9	TIM1_CH2	HIN_B
-C	PA10	TIM1_CH3	HIN_C
-Low-side (ACTIVE LOW)
-Phase	Pin	Timer	Signal
-A	PB13	TIM1_CH1N	LIN_A
-B	PB14	TIM1_CH2N	LIN_B
-C	PB15	TIM1_CH3N	LIN_C
-🔹 ADC Inputs
-Function	Pin
-BEMF_A	PA0
-BEMF_B	PA1
-BEMF_C	PA2
-Throttle (SP)	PA3
-Current IA	PA4
-Current IB	PA5
-Current IC	PA6
-VBAT	PA7
-NTC	PB0
-🔹 GPIO
-Function	Pin
-Brake	PB1
-LED	PB2
-🔹 UART
-Signal	Pin
-TX	PB6
-RX	PB7
-
-Baudrate: 9600
-
-🔹 Debug (Reserved)
-Pin	Function
-PA13	SWDIO
-PA14	SWCLK
-PB3	JTAG
-PB4	JTAG
-
-⚠️ Do not use in application.
-
-🔹 Unmapped / To Reverse
-PA11, PA12, PA15
-PB5, PB8, PB9
-PB10, PB11
-PB12 (suspected: ENABLE / FAULT)
-🔹 External Outputs (Lighting)
-
-Y-L → Yellow LED
-
-R-L → Red LED
-
-G-L → Green LED
-
-F-L → Front Light
-
-B-L → Back Light
-
-Controlled via transistor stages from GPIO.
-
-🔁 Commutation (6-Step)
-Step	High	Low	Floating
-0	A+	B-	C
-1	A+	C-	B
-2	B+	C-	A
-3	B+	A-	C
-4	C+	A-	B
-5	C+	B-	A
-⚠️ Driver Characteristics (FD2103S)
-
-HIN → active HIGH
-
-LIN → active LOW
-
-No fault tolerance (no dead-time protection)
-
-❗ Incorrect timing or logic → shoot-through → hardware damage
-❗ Misconfiguration may result in motor "locking" (both MOSFETs active)
-
-🧪 UART System
-🔹 Mode 1 — Telemetry (default)
-
-Periodic transmission (50–100 Hz)
-
-Frame format:
-
-[HEADER][LEN][DATA][CRC16]
-
-HEADER: 0xAA 0x55
-
-Example payload:
-
-uint16_t vbat_mv;
-int16_t  current_ma;
-uint16_t rpm;
-uint8_t  state;
-uint8_t  temp;
-
-Stub:
-
-void sendTelemetryFrame() {}
-🔹 Mode 2 — Debug (Interactive)
-
-Activated via:
-
-'d' → toggle debug mode
-🎮 Control
-Key	Function
-SPACE	Start / Stop
-+ / -	Speed control
-l / r	Direction
-s	Hard stop
-🔬 Debug Tools
-Key	Function
-b	BEMF stream (plotter)
-i	Current monitoring
-.	Step forward
-,	Step backward
-o	Open loop
-🔄 Phase Order Resolver
-Key	Order
-1	ABC
-2	ACB
-3	BAC
-4	BCA
-5	CAB
-6	CBA
-🔥 Autotune (Future Work)
-
-Minimal viable autotune should include:
-
-Phase order detection
-
-Minimum startup duty detection
-
-Ramp timing estimation
-
-Full implementation requires:
-
-BEMF zero-cross detection
-
-Rotor angle estimation
-
-Timing advance control
-
-🧩 Development Roadmap
-🔴 Stage 1
-
-Stable 6-step commutation
-
-No shoot-through ("no locking")
-
-🔴 Stage 2
-
-UART-controlled open loop
-
-🔴 Stage 3
-
-Stable BEMF acquisition
-
-🔴 Stage 4
-
-Sensorless transition
-
-🔴 Stage 5
-
-Telemetry system
-
-💡 Key Notes
-
-Hardware supports industrial-grade ESC functionality
-
-Critical challenges:
-
-Driver logic correctness
-
-Timing & dead-time handling
-
-Reliable UART debugging
-
-🧷 Backup Notice
-
-This document represents multiple hours of reverse engineering and debugging.
-
-Recommended:
-
-Store locally (.md / PDF)
-
-Keep versioned backups
-
-Archive externally
-
-🚀 Next Steps
-
-UART command parser implementation
-
-ESC state machine framework
-
-Sensorless control core
+KAMAIKASHI SENSORLESS ESC
+Reverse-engineering notes / archive snapshot
+
+==================================================
+1. PROJECT TYPE
+==================================================
+
+Scooter-class BLDC ESC based on STM32F103C8T6.
+Reverse-engineered board with custom firmware bring-up.
+
+Main goals:
+- stable bridge control
+- true 6PWM
+- open-loop startup
+- current sensing understanding
+- sensorless transition later
+
+==================================================
+2. CONFIRMED HARDWARE
+==================================================
+
+MCU:
+- STM32F103C8T6
+
+Gate drivers:
+- FD2103S x3
+
+Bridge outputs:
+- PA8  -> HIN_A
+- PA9  -> HIN_B
+- PA10 -> HIN_C
+
+- PB13 -> LIN_A
+- PB14 -> LIN_B
+- PB15 -> LIN_C
+
+ADC:
+- PA0 -> BEMF_A
+- PA1 -> BEMF_B
+- PA2 -> BEMF_C
+- PA3 -> Throttle / SP
+- PA4 -> IA
+- PA5 -> IB
+- PA6 -> IC
+- PA7 -> VBAT
+- PB0 -> NTC
+
+Other GPIO:
+- PB1 -> Brake
+- PB2 -> LED
+- PB6 -> UART TX
+- PB7 -> UART RX
+
+Reverse-engineered outputs:
+- PB9  -> Back Light
+- PB11 -> Front Light
+- PB4  -> DisplayControl
+
+Reserved:
+- PA13 -> SWDIO
+- PA14 -> SWCLK
+
+Free GPIO:
+- PA11
+- PA12
+- PB5
+- PB8
+- PB10
+- PB12
+
+Extra after JTAG disable:
+- PA15
+- PB3
+
+==================================================
+3. CRITICAL DISCOVERIES
+==================================================
+
+A) No confirmed global gate-driver enable
+The board appears to have driver supply rails, but no confirmed separate global enable line for the three FD2103S drivers.
+
+B) Safe OFF state is not solved by timer disable alone
+Disabling complementary outputs alone caused low-side sticking.
+
+Reliable OFF per phase:
+- HIN = LOW
+- LIN = HIGH
+
+This must be forced by GPIO for OFF phases.
+
+C) True 6PWM can be used for active phases
+Working model:
+- active phases -> TIM1 complementary outputs
+- OFF phase -> GPIO hard-off
+
+D) Current shunts are only on low-side emitters
+This means current measurement is only valid when the corresponding low-side transistor / return path is conducting.
+
+This is sector dependent low-side current sensing, not always-valid full phase current measurement.
+
+==================================================
+4. CURRENT SENSE INTERPRETATION
+==================================================
+
+Resistor-based tests confirmed:
+
+Step 0 = A+ B- C float
+- strongest on IB
+
+Step 2 = B+ C- A float
+- strongest on IC
+
+Step 4 = C+ A- B float
+- strongest on IA
+
+Conclusion:
+- IA corresponds to low-side A return path
+- IB corresponds to low-side B return path
+- IC corresponds to low-side C return path
+
+==================================================
+5. COMMUTATION TABLE
+==================================================
+
+Step 0: A+ B- C float
+Step 1: A+ C- B float
+Step 2: B+ C- A float
+Step 3: B+ A- C float
+Step 4: C+ A- B float
+Step 5: C+ B- A float
+
+==================================================
+6. VBAT
+==================================================
+
+Empirical calibration:
+- VBAT_SCALE = 31.1f
+
+==================================================
+7. PRACTICAL STATUS
+==================================================
+
+Confirmed working:
+- MCU bring-up
+- UART
+- ADC
+- VBAT measurement
+- true 6PWM test path
+- hard OFF by GPIO
+- motor spin at sensible speed with current-limited supply
+- front light / back light / display control mapping
+
+Still in progress:
+- production-ready 6-step layer
+- sector-aware current sensing in firmware
+- open-loop startup tuning
+- BEMF / sensorless logic
+
+==================================================
+8. IMPORTANT RULES
+==================================================
+
+- Do not trust timer disable alone for OFF phases.
+- Use current-limited supply during bring-up.
+- Treat low-side shunt readings as sector dependent.
+- Keep SWD alive.
+- Do not rewrite hardware assumptions without checking on board.
+
+==================================================
+9. NEXT STEPS
+==================================================
+
+1. Clean bridge control abstraction
+2. Finalize 6PWM active + GPIO OFF strategy
+3. Integrate current sense with active sector
+4. Improve open-loop startup
+5. Add BEMF-based sensorless transition
+6. Continue reverse-engineering remaining IO only if needed
