@@ -1,299 +1,382 @@
 # KAMAIKASHI SENSORLESS ESC
 
-Reverse-engineering and custom firmware work for a scooter-class BLDC ESC based on **STM32F103C8T6** and **FD2103S** gate drivers.
+Reverse-engineering and custom firmware development for a scooter-class BLDC ESC based on **STM32F103C8T6** and **FD2103S** gate drivers.
 
-This repository documents the hardware mapping, true 6PWM bring-up, current-sense behavior, lighting IO discovery, and the path toward stable sensorless control.
+This repository documents the full bring-up path from raw board mapping to stable sensorless BLDC control experiments.
 
-## Current project status
+---
 
-### Working
-- STM32F103C8T6 main MCU
-- TIM1 true 6PWM bring-up
-- Safe phase OFF state using GPIO:
-  - `HIN = LOW`
-  - `LIN = HIGH`
-- Motor spin test working at sensible speed with current-limited supply
-- Battery voltage measurement calibrated
-- Low-side shunt current sensing understood
-- Front light / back light / display control pins partially reverse-engineered
+## Project goals
 
-### In progress
-- robust 6-step commutation cleanup
-- current-sense integration with active sector logic
-- open-loop startup tuning
-- sensorless BEMF transition logic
+This project focuses on:
 
-## Key hardware findings
+* reverse-engineering the original ESC hardware
+* full **TIM1 true 6PWM complementary drive**
+* reliable **safe OFF-state handling**
+* low-side shunt **current sense interpretation**
+* VBAT and analog input calibration
+* open-loop startup strategies
+* future **sensorless BEMF zero-cross control**
+* repository-quality documentation of hardware findings
 
-### Power stage
-- 3-phase bridge
-- FD2103S x3 gate drivers
-- STM32 TIM1 used for complementary outputs
+---
 
-### Important driver behavior
-There is **no confirmed global driver enable pin** for the gate drivers.
+## Project maturity
 
-The practical safe solution found during testing is:
-- active phases: driven by true TIM1 complementary outputs
-- OFF phase: forced by GPIO, not by trusting timer disable alone
+This is currently a **bench-development repository**.
 
-Safe OFF state per phase:
-- `HIN = LOW`
-- `LIN = HIGH`
+It is intended for:
 
-This resolved the low-side "sticking" issue.
+* hardware bring-up
+* reverse engineering
+* bridge validation
+* ADC / sensing validation
+* safe motor spin tests
+* startup and commutation experiments
 
-### Current sensing
-The current shunts are located on the **low-side emitters**.
+It is **NOT road-ready vehicle firmware**.
 
-That means current measurement is only valid when the corresponding low-side path is actually conducting.
-This is not full always-valid phase-current sensing; it is **sector/state dependent low-side current sensing**.
+---
 
-## MCU pin map
+## Confirmed working
 
-### Core ESC
-#### Power stage
-- `PA8`  -> `HIN_A`
-- `PA9`  -> `HIN_B`
-- `PA10` -> `HIN_C`
+### Hardware bring-up
 
-- `PB13` -> `LIN_A`
-- `PB14` -> `LIN_B`
-- `PB15` -> `LIN_C`
+* STM32F103C8T6 initialization
+* TIM1 complementary 6PWM routing
+* FD2103S gate-driver integration
+* UART debug interface
+* GPIO override for inactive phases
 
-#### ADC / sensing
-- `PA0` -> `BEMF_A`
-- `PA1` -> `BEMF_B`
-- `PA2` -> `BEMF_C`
-- `PA3` -> `Throttle / SP`
-- `PA4` -> `IA`
-- `PA5` -> `IB`
-- `PA6` -> `IC`
-- `PA7` -> `VBAT`
-- `PB0` -> `NTC`
+### Bridge behavior
 
-#### Other GPIO
-- `PB1` -> `Brake`
-- `PB2` -> `Status LED`
+* reliable per-phase OFF state
+* inactive phase float mode
+* high-side PWM control
+* low-side static ON control
+* low-side sticking issue understood and mitigated
 
-#### UART
-- `PB6` -> `USART TX`
-- `PB7` -> `USART RX`
+### Analog and sensing
 
-### Reverse-engineered extra outputs
-- `PB9`  -> `Back Light`
-- `PB11` -> `Front Light`
-- `PB4`  -> `DisplayControl`
+* VBAT divider scaling and calibration
+* BEMF ADC input mapping
+* low-side shunt current sensing behavior
+* sector/state dependent current interpretation
+* NTC thermal input mapped
 
-### Reserved debug
-- `PA13` -> `SWDIO`
-- `PA14` -> `SWCLK`
+### Bench motor tests
 
-### Extra free GPIO
-- `PA11`
-- `PA12`
-- `PB5`
-- `PB8`
-- `PB10`
-- `PB12`
+* open-loop spin success
+* sinusoidal drive experiments
+* 6-step commutation validation
+* current-limited supply testing
 
-### Extra GPIO after JTAG disable
-- `PA15`
-- `PB3`
+---
 
-## VBAT calibration
+## Still in progress
 
-Empirically tuned:
-- `VBAT_SCALE = 31.1f`
+* final 6-step commutation cleanup
+* sector-aware current reconstruction
+* startup ramp tuning
+* robust wheel restart logic
+* BEMF zero-cross detection
+* open-loop → closed-loop transition
+* undervoltage and timeout fault layer
+* production-safe thermal protection
 
-Measured points used during tuning:
-- ~5 V input
-- ~24 V input
+---
 
-## Commutation model
+## Start here
 
-6-step table:
+If you want the **current main firmware direction**, start with:
 
-- Step 0: `A+ B- C float`
-- Step 1: `A+ C- B float`
-- Step 2: `B+ C- A float`
-- Step 3: `B+ A- C float`
-- Step 4: `C+ A- B float`
-- Step 5: `C+ B- A float`
+```text
+firmware/main/CUSTOM_FIRMWARE_ESC.ino
+```
 
-## Notes on current sense interpretation
+All other firmware files should be treated as:
 
-Because the shunts are only on low-side emitters, the most meaningful current sample in a given 6-step sector is usually the phase that is currently acting as the low-side return path.
+* experimental
+* archived
+* single-purpose test sketches
+* bring-up tools
 
-This was confirmed during resistor-based testing:
-- Step 0 -> strongest on `IB`
-- Step 2 -> strongest on `IC`
-- Step 4 -> strongest on `IA`
+---
 
-## Repository contents
+## Repository layout
 
-- `CUSTOM_FIRMEARE_ESC.ino`
-  - main custom ESC firmware work
-- `6PWM - TEST`
-  - dedicated true 6PWM bring-up and bridge behavior testing
-- `WhatWeHave.txt`
-  - project reverse-engineering notes / architecture archive
-- `ESC_LIME_GEN3_README.md`
-  - focused hardware/firmware notes for this board
+```text
+KAMAIKASHI-SENSORLESS-ESC/
+│
+├─ README.md
+├─ LICENSE
+├─ .gitignore
+│
+├─ docs/
+│  ├─ hardware_notes.md
+│  ├─ pinmap.md
+│  ├─ current_sense.md
+│  ├─ bridge_behavior.md
+│  └─ bench_safety.md
+│
+├─ firmware/
+│  ├─ main/
+│  │  └─ CUSTOM_FIRMWARE_ESC.ino
+│  │
+│  ├─ experimental/
+│  │  ├─ 6pwm_bridge_test.ino
+│  │  ├─ open_loop_sinusoidal_test.ino
+│  │  └─ alt_test_firmware.ino
+│  │
+│  └─ archive/
+│     └─ old_versions/
+│
+└─ media/
+   ├─ board_photo_top.jpg
+   ├─ board_photo_annotated.jpg
+   └─ block_diagram.png
+```
 
-## Recommended next milestones
-1. clean true 6PWM test into production-style bridge layer
-2. finalize sector-aware current sense handling
-3. stabilize open-loop startup and ramp
-4. integrate BEMF zero-cross / sensorless transition
-5. reorganize repo files and naming
+---
 
-## Warning
-This is hardware-near ESC development.
-Use:
-- current-limited supply
-- short test bursts
-- temperature monitoring
-- cautious bring-up sequence
+## Hardware platform
+
+### MCU
+
+* **STM32F103C8T6**
+
+### Gate drivers
+
+* **FD2103S x3**
+
+### PWM power stage
+
+| MCU Pin | Function |
+| ------- | -------- |
+| PA8     | HIN_A    |
+| PA9     | HIN_B    |
+| PA10    | HIN_C    |
+| PB13    | LIN_A    |
+| PB14    | LIN_B    |
+| PB15    | LIN_C    |
+
+### ADC / sensing
+
+| MCU Pin | Signal        |
+| ------- | ------------- |
+| PA0     | BEMF_A        |
+| PA1     | BEMF_B        |
+| PA2     | BEMF_C        |
+| PA3     | Throttle / SP |
+| PA4     | IA            |
+| PA5     | IB            |
+| PA6     | IC            |
+| PA7     | VBAT          |
+| PB0     | NTC           |
+
+### UART
+
+| MCU Pin | Signal |
+| ------- | ------ |
+| PB6     | TX     |
+| PB7     | RX     |
+
+### Other discovered GPIO
+
+| MCU Pin | Function       |
+| ------- | -------------- |
+| PB1     | Brake          |
+| PB2     | Status LED     |
+| PB4     | DisplayControl |
+| PB9     | Back Light     |
+| PB11    | Front Light    |
+
+---
+
+## Important engineering findings
+
+### Safe OFF state
+
+A major practical finding of this project:
+
+> disabling TIM1 PWM alone is **not always enough** for a true OFF bridge state.
+
+Reliable inactive phase OFF required GPIO forcing:
+
+* **HIN = LOW**
+* **LIN = HIGH**
+
+This fully solved the observed **low-side MOSFET sticking behavior** during bench tests.
+
+---
+
+### Current sense behavior
+
+The board uses **low-side shunt current sensing**.
+
+This means current interpretation is:
+
+* commutation-sector dependent
+* valid only when the return low-side path is conducting
+* not equal to permanent true phase-current measurement
+
+This is critical for future:
+
+* overcurrent protection
+* torque estimation
+* startup fault detection
+* current limiting
+
+---
+
+### VBAT scaling
+
+VBAT measurement is implemented through a resistor divider.
+
+The final scaling factor should always be **bench-calibrated against real supply voltage**, because divider assumptions may differ between board revisions.
+
+---
+
+## Quick start
+
+### Requirements
+
+* STM32F103 target board
+* matching ESC PCB revision
+* Arduino IDE or PlatformIO
+* STM32 core toolchain
+* current-limited bench power supply
+* UART terminal
+* oscilloscope / logic analyzer recommended
+
+### First power-up procedure
+
+1. Flash `CUSTOM_FIRMWARE_ESC.ino`
+2. verify pin mapping against your board
+3. power from current-limited supply
+4. verify idle bridge OFF state
+5. check VBAT ADC scaling
+6. verify UART debug output
+7. only then connect motor for short spin bursts
+
+---
+
+## Bench safety
+
+This is **power electronics development**.
+
+Always use:
+
+* current-limited lab supply
+* short spin bursts
+* thermal monitoring of MOSFETs and drivers
+* wheel off ground
+* no body contact with spinning rotor
+* emergency power disconnect nearby
+
+Do **not** directly test first revisions on a full battery pack.
+
+---
+
+## Recommended debug tools
+
+Recommended instrumentation used during development:
+
+* Hantek 6022BL oscilloscope
+* logic analyzer
+* UART terminal
+* thermal camera or IR thermometer
+* bench PSU with current limit
+
+Useful signals to observe:
+
+* TIM1 complementary outputs
+* LIN inactive logic level
+* phase BEMF waveform
+* low-side shunt amplifier output
+* VBAT divider ADC waveform
+
+---
+
+## Next milestones
+
+1. extract bridge control into reusable layer
+2. finalize sector-aware current sense logic
+3. improve startup ramp and relock behavior
+4. implement robust BEMF zero-cross detection
+5. add sensorless closed-loop handoff
+6. add undervoltage and timeout fault handling
+7. add thermal protection logic
+8. clean experimental firmware into reusable modules
+
+---
+
+## Long-term roadmap
+
+### Firmware architecture
+
+* `hal_pwm`
+* `bridge_control`
+* `adc_sampling`
+* `bemf_detection`
+* `current_limit`
+* `fault_manager`
+* `uart_cli`
+
+### Control roadmap
+
+* stable 6-step startup
+* adaptive ramp
+* freewheel relock
+* BEMF timing advance
+* zero-cross debounce
+* current-based stall detection
+* thermal derating
+
+---
+
+## Disclaimer
+
+This repository is intended for:
+
+* research
+* learning
+* reverse engineering
+* custom firmware development
+* BLDC control experimentation
+
+Use at your own risk.
+
+The author does **not recommend direct vehicle deployment** until:
+
+* startup reliability
+* fault handling
+* thermal safety
+* current limiting
+* sensorless closed-loop stability
+
+are fully validated.
+
+---
+
+## Author notes
+
+The strongest current value of this repository is not only firmware code, but also:
+
+* documented board discoveries
+* real-world bridge behavior findings
+* safe OFF-state solution
+* practical low-side current-sense interpretation
+* reverse-engineered pin mapping
+
+This makes the repository useful both as:
+
+* working firmware base
+* hardware reverse-engineering reference
+* BLDC ESC development notes
+
+---
 
 ## License
-TBD⚡ STM32F103C8T6 ESC (FD2103S) – 6PWM BLDC Controller
 
-BLDC motor controller firmware for STM32F103C8T6 using FD2103S half-bridge gate drivers and true 6PWM (TIM1 complementary outputs).
-
-Architecture aligned with LimeGen3-class ESC designs.
-
-🚀 Features
-
-True 6PWM control (TIM1 CHx + CHxN)
-
-Compatible with FD2103S drivers
-
-Safe disarm / all-off state
-
-Open-loop startup:
-
-rotor alignment
-
-controlled acceleration ramp
-
-UART interface for live tuning
-
-Sensorless control (planned)
-
-🧠 Architecture
-
-The control architecture follows a structure similar to LimeGen3 ESC controllers, including:
-
-3-phase half-bridge topology
-
-High-side PWM with complementary low-side control
-
-Timer-driven commutation
-
-Hardware dead-time handling via advanced timer (TIM1)
-
-Separation of:
-
-commutation logic
-
-power stage control
-
-startup sequencing
-
-This ensures compatibility with typical scooter-class BLDC systems.
-
-🧠 Driver Interface
-
-FD2103S half-bridge driver:
-
-HIN → High-side control (non-inverting)
-
-LIN → Low-side control (internally inverted)
-
-Built-in shoot-through protection
-
-Control model:
-
-OCREF = 1 → High-side ON, Low-side OFF  
-OCREF = 0 → High-side OFF, Low-side ON  
-🔌 Hardware
-MCU
-
-STM32F103C8T6 (Cortex-M3, 72 MHz)
-
-Gate Drivers
-
-FD2103S ×3
-
-📍 Pin Mapping
-Phase	High-side (HIN)	Low-side (LIN)
-A	PA8 (TIM1_CH1)	PB13 (TIM1_CH1N)
-B	PA9 (TIM1_CH2)	PB14 (TIM1_CH2N)
-C	PA10 (TIM1_CH3)	PB15 (TIM1_CH3N)
-⚙️ PWM Configuration
-
-Timer: TIM1
-
-Mode: PWM with complementary outputs
-
-Frequency: 20 kHz
-
-Dead-time: ~1 µs
-
-Idle State
-Signal	State
-HIN	LOW
-LIN	HIGH
-🔁 6-Step Commutation
-Step	High	Low	Floating
-1	A	B	C
-2	A	C	B
-3	B	C	A
-4	B	A	C
-5	C	A	B
-6	C	B	A
-▶️ Open Loop Control
-
-Startup sequence:
-
-Rotor alignment
-
-Release phase
-
-Step-based commutation
-
-Acceleration ramp
-
-🎮 UART Controls
-Key	Function
-space	Start / Stop
-[	Slower
-]	Faster
-p	Increase run duty
-o	Decrease run duty
-k	Increase align duty
-j	Decrease align duty
-u	Increase acceleration
-i	Decrease acceleration
-a	All OFF
-s	Status
-h	Help
-⚠️ Safety
-
-Use current-limited power supply during testing
-
-Monitor temperature of MOSFETs and drivers
-
-Ensure correct dead-time configuration
-
-Verify wiring before power-up
-
-📌 Status
-Module	Status
-6PWM Control	Implemented
-Open Loop	Implemented
-Sensorless	In progress
-📜 License
-
-MIT (or custom)
+Recommended: **MIT License**
