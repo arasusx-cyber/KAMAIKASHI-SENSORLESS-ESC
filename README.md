@@ -5,7 +5,9 @@ Reverse-engineering and custom firmware development for a scooter-class BLDC ESC
 This repository documents the full bring-up path from raw board mapping to stable sensorless BLDC control experiments.
 
 ---
-
+![](lime3-1.jpg)
+![](lime3-2.jpg)
+---
 ## Project goals
 
 This project focuses on:
