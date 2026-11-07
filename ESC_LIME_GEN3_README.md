@@ -1,17 +1,7 @@
-# ESC_LIME_GEN3 Readme
+# Lime Gen3 ESC notes
 
-## Firmware
+The maintained entry point is the [project README](README.md).
 
-Detailed information about the firmware will be available soon.
-
-## Hardware Connections
-
-Information about hardware connections will be provided here.
-
-## UART Commands
-
-Documentation of UART commands will be included shortly.
-
-## Status
-
-**Under construction, not ready yet**
+- [Current firmware and UART controls](docs/FIRMWARE.md)
+- [Hardware mapping and engineering findings](docs/HARDWARE.md)
+- [Archived research snapshot](WhatWeHave.txt)
